@@ -36,3 +36,7 @@ Open your terminal or command prompt and run the following commands to pull down
 ```bash
 git clone [https://github.com/Maskman014/aegis-routing-engine.git](https://github.com/Maskman014/aegis-routing-engine.git)
 cd aegis-routing-engine
+### 3. Install Project Dependencies
+Install all required node packages and project binaries cleanly using npm:
+```bash
+npm install
