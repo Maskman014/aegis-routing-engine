@@ -1,0 +1,8 @@
+{
+  "name": "Aegis Routing Engine",
+  "description": "A Multi-Vendor AI Infrastructure Gateway that routes developer prompts across DeepSeek, OpenAI, and Anthropic Claude tiers based on dynamic semantic complexity scoring, optimizing latencies and expenditures.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

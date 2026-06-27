@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "request": {
+      "title": "Aegis Routing Prompt Request",
+      "description": "An evaluation of a natural language text prompt routed by the Aegis Engine.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Auto-UUID generated on creation."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The unique identifier of the authenticated developer."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp."
+        },
+        "originalPrompt": {
+          "type": "string",
+          "description": "The raw natural language prompt submitted for routing."
+        },
+        "estimatedTokens": {
+          "type": "integer",
+          "description": "Simulated token count of the prompt."
+        },
+        "semanticComplexityScore": {
+          "type": "integer",
+          "description": "Dynamic complexity assessment from 0 to 100."
+        },
+        "targetModelRouted": {
+          "type": "string",
+          "enum": ["Gemini Flash", "Gemini Pro"],
+          "description": "The target model selected by the routing engine."
+        },
+        "executionLatencyMs": {
+          "type": "integer",
+          "description": "Execution latency profile in milliseconds."
+        },
+        "costSavedUSD": {
+          "type": "number",
+          "description": "Difference value representing cost savings in USD."
+        }
+      },
+      "required": [
+        "userId",
+        "timestamp",
+        "originalPrompt",
+        "estimatedTokens",
+        "semanticComplexityScore",
+        "targetModelRouted",
+        "executionLatencyMs",
+        "costSavedUSD"
+      ]
+    }
+  },
+  "firestore": {
+    "requests/{requestId}": {
+      "schema": "request",
+      "description": "Collection of developer prompt routing evaluations and performance stats."
+    }
+  }
+}

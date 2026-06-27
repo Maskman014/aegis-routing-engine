@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net - default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Schema Validation for Request Entity
+    function isValidRequest(data) {
+      return data.keys().hasAll([
+        'userId',
+        'timestamp',
+        'originalPrompt',
+        'estimatedTokens',
+        'semanticComplexityScore',
+        'targetModelRouted',
+        'executionLatencyMs',
+        'costSavedUSD'
+      ])
+      && data.keys().size() == 8
+      && data.userId is string
+      && data.userId == request.auth.uid
+      && data.timestamp == request.time
+      && data.originalPrompt is string
+      && data.originalPrompt.size() <= 50000
+      && data.estimatedTokens is int
+      && data.estimatedTokens >= 0
+      && data.semanticComplexityScore is int
+      && data.semanticComplexityScore >= 0
+      && data.semanticComplexityScore <= 100
+      && data.targetModelRouted is string
+      && (data.targetModelRouted == 'DeepSeek V4 Flash' || data.targetModelRouted == 'Google Gemini' || data.targetModelRouted == 'Anthropic Claude' || data.targetModelRouted == 'OpenAI' || data.targetModelRouted == 'Google Gemini 3.5 Flash' || data.targetModelRouted == 'Anthropic Claude 4.5 Sonnet' || data.targetModelRouted == 'OpenAI Deep-Reasoning' || data.targetModelRouted == 'Gemini Flash' || data.targetModelRouted == 'Gemini Pro' || data.targetModelRouted == 'OpenAI GPT-5.4-mini')
+      && data.executionLatencyMs is int
+      && data.executionLatencyMs >= 0
+      && data.costSavedUSD is number;
+    }
+
+    // Requests collection rules
+    match /requests/{requestId} {
+      // Validate document ID path parameter
+      allow get: if isSignedIn() && isValidId(requestId) && resource.data.userId == request.auth.uid;
+      
+      // Strict rule for lists - client cannot perform blanket queries
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Write conditions
+      allow create: if isSignedIn() && isValidId(requestId) && isValidRequest(incoming());
+      
+      // Telemetries are completely write-once / immutable
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
