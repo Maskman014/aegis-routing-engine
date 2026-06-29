@@ -40,3 +40,8 @@ cd aegis-routing-engine
 Install all required node packages and project binaries cleanly using npm:
 ```bash
 npm install
+### 4. Configure Your Environment Variables
+Create a file named precisely `.env` in the root of your project directory (`C:\Users\ADMIN\Downloads\aegis-routing-engine\.env`) and insert your access key configuration line:
+```env
+GEMINI_API_KEY=your_secure_api_key_here
+npm run dev
