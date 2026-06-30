@@ -23,29 +23,37 @@ The system runs a 4-tier routing matrix designed to balance raw computational po
 
 ---
 
-## ⚙️ Installation & Local Deployment
-
+Markdown
+⚙️ Installation & Local Deployment
 Follow these exact steps to clone, configure, and launch the engine locally on your machine.
 
-### 1. Prerequisites
+### Prerequisites
 Ensure you have the Node.js runtime installed on your operating system:
-*   **Node.js** (v20 or higher recommended)
+* Node.js (v20 or higher recommended)
 
-### 2. Clone the Repository
+### Clone the Repository
 Open your terminal or command prompt and run the following commands to pull down the source code and step into the project root directory:
 ```bash
 git clone [https://github.com/Maskman014/aegis-routing-engine.git](https://github.com/Maskman014/aegis-routing-engine.git)
 cd aegis-routing-engine
 ```
-### 3. Install Project Dependencies
-Install all required node packages and project binaries cleanly using npm:
-```bash
+Install Project Dependencies
+Install all required node packages cleanly using npm:
+```
+Bash
 npm install
 ```
-### 4. Configure Your Environment Variables
-Create a file named precisely `.env` in the root of your project directory (`C:\Users\ADMIN\Downloads\aegis-routing-engine\.env`) and insert your access key configuration line:
-```env
-GEMINI_API_KEY=your_secure_api_key_here
+Configure Your Environment Variables
+Create a file named precisely .env in the root of your project directory and insert your Gemini API access key:
 
+```
+GEMINI_API_KEY=your_secure_api_key_here
+```
+Note: Firebase authentication settings are pre-configured to work instantly on localhost. If you wish to connect your own Firebase backend database, simply update the credentials inside firebase-applet-config.json.
+
+Start the Application
+Launch the local development server to run the frontend interface and backend routing infrastructure:
+
+```Bash
 npm run dev
 ```
