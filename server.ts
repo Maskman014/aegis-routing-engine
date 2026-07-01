@@ -5,9 +5,6 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import 'dotenv/config';
 
-// Load environment variables
-
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -43,7 +40,6 @@ function evaluatePromptComplexity(prompt: string): {
 } {
   const text = prompt || "";
   const length = text.length;
-  // Standard token approximation: ~4 characters per token
   const estimatedTokens = Math.max(1, Math.ceil(length / 4));
   
   let score = 0;
@@ -104,20 +100,14 @@ function evaluatePromptComplexity(prompt: string): {
     }
   });
 
-  // Normalize final score between 0 and 100
   score = Math.min(100, score);
   
-  // Guard baseline score for non-empty input
   if (text.trim().length > 0 && score < 10) {
     score = 12;
     reasons.push("Default minimal request baseline (+12 pts)");
   }
 
-  return {
-    score,
-    estimatedTokens,
-    reasons
-  };
+  return { score, estimatedTokens, reasons };
 }
 
 async function startServer() {
@@ -138,16 +128,8 @@ async function startServer() {
       const score = evalMetrics.score;
       const estimatedTokens = evalMetrics.estimatedTokens;
 
-      // Dynamic routing threshold score from developer panel (defaults to 40)
-      const activeThreshold = typeof threshold === "number" ? threshold : 40;
-
-      // Define dynamic score boundaries based on the threshold
-      const t1Max = Math.round(activeThreshold * 0.5);
-      const t2Max = Math.round(activeThreshold * 1.25);
-      const t3Max = Math.round(t2Max + (100 - t2Max) * 0.6);
-
       let targetModelRouted = "";
-      let costPer1k = 0; // Price per 1k tokens
+      let costPer1k = 0;
       let minLatency = 100;
       let maxLatency = 300;
 
@@ -173,23 +155,22 @@ async function startServer() {
         maxLatency = 3200;
       }
 
-      // Define standard simulated response texts for sandbox execution fallbacks
       let responseText = "";
       let isSimulated = true;
       let backupTriggered = false;
-      let finalModelRouted = targetModelRouted;
-      let finalCostPer1k = costPer1k;
-      let finalMinLatency = minLatency;
-      let finalMaxLatency = maxLatency;
+      const finalModelRouted = targetModelRouted;
+      const finalCostPer1k = costPer1k;
+      const finalMinLatency = minLatency;
+      const finalMaxLatency = maxLatency;
 
-      // Real execution attempt with multi-vendor clients if API keys are active
+      // Real execution attempt with valid SDK production string key identifiers
       try {
         if (targetModelRouted === "Google Gemini") {
           const ai = getAIClient();
           if (ai) {
             console.log(`[Aegis Gateway] Executing real Gemini request for ${targetModelRouted}`);
             const response = await ai.models.generateContent({
-              model: "gemini-3.5-flash",
+              model: "gemini-2.5-flash", 
               contents: prompt,
             });
             if (response && response.text) {
@@ -200,68 +181,35 @@ async function startServer() {
         }
       } catch (err: any) {
         console.warn(`[Aegis Router Warning] Selected route ${targetModelRouted} failed or unconfigured: ${err.message}`);
+        backupTriggered = true;
       }
 
       // High-quality fallback simulation response generator
       if (!responseText) {
         if (finalModelRouted === "DeepSeek V4 Flash") {
-          responseText = JSON.stringify({
-            status: "success",
-            provider: "DeepSeek V4 Flash",
-            complexityScore: score,
-            metricAnalysis: {
-              charLength: prompt.length,
-              tokenCountEst: estimatedTokens
-            },
-            data: {
-              message: "This prompt was evaluated at low complexity and successfully routed to the ultra-fast DeepSeek Flash tier.",
-              note: "I processed your request instantly. DeepSeek's high-efficiency lightweight architecture resolved this text stream in near-zero latency."
-            }
-          }, null, 2);
+          responseText = `[Aegis Gateway - DeepSeek V4 Flash Simulation Response]\n` +
+                         `• Status: Success\n` +
+                         `• Complexity Score: ${score}/100\n` +
+                         `• Estimated Payload Tokens: ${estimatedTokens}\n\n` +
+                         `This prompt was evaluated at low complexity and successfully routed to the ultra-fast DeepSeek Flash tier. The request was processed with near-zero latency optimization settings.`;
         } else if (finalModelRouted === "Google Gemini") {
-          responseText = `[Aegis Gateway - Google Gemini Simulation Response]
-This prompt was evaluated at low-to-medium complexity (${score}/100) and routed to the Google Gemini tier.
-
-Response Summary:
-Your request has been processed successfully by Gemini 3.5 Flash. The multimodal-optimized routing delivered a rapid response at highly optimized cost efficiency.`;
+          responseText = `[Aegis Gateway - Google Gemini Simulation Response]\nThis prompt was evaluated at low-to-medium complexity (${score}/100) and routed to the Google Gemini tier.\n\nResponse Summary:\nYour request has been processed successfully by Gemini 2.5 Flash. The multimodal-optimized routing delivered a rapid response at highly optimized cost efficiency.`;
         } else if (finalModelRouted === "Anthropic Claude") {
-          responseText = `### [Aegis Gateway - Anthropic Claude Simulation Response]
-This prompt was evaluated at medium-to-high complexity (${score}/100) and routed to the Anthropic Claude tier.
-
-#### Detailed Cognitive Walkthrough:
-1. **Syntactic analysis** matches key code signatures or specialized data constructs.
-2. **System resolved** to allocate Anthropic's Claude 4.5 Sonnet reasoning engine to balance nuance and complexity.
-3. **Recommended modular implementation pattern**:
-\`\`\`typescript
-export interface GatewayConfig {
-  provider: "deepseek" | "gemini" | "anthropic" | "openai";
-  latencyLimitMs: number;
-}
-\`\`\`
-Let me know if you would like me to conduct a full mathematical or architectural breakdown!`;
+          responseText = `### [Aegis Gateway - Anthropic Claude Simulation Response]\nThis prompt was evaluated at medium-to-high complexity (${score}/100) and routed to the Anthropic Claude tier.\n\n#### Detailed Cognitive Walkthrough:\n1. **Syntactic analysis** matches key code signatures or specialized data constructs.\n2. **System resolved** to allocate Anthropic's Claude 4.5 Sonnet reasoning engine to balance nuance and complexity.\n3. **Recommended modular implementation pattern**:\n\`\`\`typescript\nexport interface GatewayConfig {\n  provider: "deepseek" | "gemini" | "anthropic" | "openai";\n  latencyLimitMs: number;\n}\n\`\`\`\nLet me know if you would like me to conduct a full mathematical or architectural breakdown!`;
         } else {
-          responseText = `[Aegis Gateway - OpenAI Deep-Reasoning Simulation Response]
-This prompt was evaluated at extreme complexity (${score}/100) and routed to the deep-reasoning OpenAI Pro tier.
-
-Deep System Verification & Logic Tree Resolution:
-- Evaluated heavy mathematical equations, deep technical keywords, or recursive programming syntax structures.
-- Engaged OpenAI's multi-step deep reasoning paradigm to execute thorough pre-computation search sweeps.
-- Final proof, dynamic recursion formulas, and cached data patterns verified. System state fully coherent.`;
+          responseText = `[Aegis Gateway - OpenAI Deep-Reasoning Simulation Response]\nThis prompt was evaluated at extreme complexity (${score}/100) and routed to the deep-reasoning OpenAI Pro tier.\n\nDeep System Verification & Logic Tree Resolution:\n- Evaluated heavy mathematical equations, deep technical keywords, or recursive programming syntax structures.\n- Engaged OpenAI's multi-step deep reasoning paradigm to execute thorough pre-computation search sweeps.\n- Final proof, dynamic recursion formulas, and cached data patterns verified. System state fully coherent.`;
         }
       }
 
       const executionLatencyMs = Math.floor(Math.random() * (finalMaxLatency - finalMinLatency + 1)) + finalMinLatency;
 
-      // Calculate USD pricing metrics
       const responseTokens = Math.max(20, Math.ceil(responseText.length / 4));
       const totalTokens = estimatedTokens + responseTokens;
       
-      // Baseline flat-rate of $0.015 per 1k tokens ($15 per 1M)
       const baselineCost = (totalTokens * 0.015) / 1000;
       const actualCost = (totalTokens * finalCostPer1k) / 1000;
       const costSavedUSD = Math.max(0, baselineCost - actualCost);
 
-      // Return comprehensive metadata
       return res.json({
         success: true,
         originalPrompt: prompt,
@@ -282,12 +230,10 @@ Deep System Verification & Logic Tree Resolution:
     }
   });
 
-  // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", service: "Aegis Routing Engine" });
   });
 
-  // Vite middleware or static serving depending on environment
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
