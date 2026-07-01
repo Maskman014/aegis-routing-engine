@@ -1,8 +1,6 @@
 {
-  "apiKey": "AIzaSyCHAS7e-CljCMHpfeFOiNd9ZGyx2YFD_bE"
+  "apiKey": "AIzaSyCHAS7e-CljCMHpfeFOiNd9ZGyx2YFD_bE",
   "authDomain": "aegis-routing-engine.firebaseapp.com",
   "projectId": "aegis-routing-engine",
-  "storageBucket": "aegis-routing-engine.firebasestorage.app",
-  "messagingSenderId": "35007474250",
-  "appId": "1:35007474250:web:f2605c4a726ac6a43c94b3"
+  "storageBucket": "aegis-routing-engine.firebasestorage.app"
 }
