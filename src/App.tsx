@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  signInWithPopup, 
+  signInWithRedirect, 
   signOut, 
   onAuthStateChanged, 
   User 
@@ -29,7 +29,7 @@ import { PageAnalyticsCore } from "./components/PageAnalyticsCore";
 import { PageAuditLedger } from "./components/PageAuditLedger";
 import { PageThresholdConfigurator } from "./components/PageThresholdConfigurator";
 import { RoutingRequest, TerminalLogEntry } from "./types";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -40,19 +40,15 @@ export default function App() {
   const [logs, setLogs] = useState<TerminalLogEntry[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Persistent baseline routing complexity threshold score state
   const [threshold, setThreshold] = useState<number>(() => {
     const saved = localStorage.getItem("aegis_complexity_threshold");
     return saved ? parseInt(saved, 10) : 40;
   });
 
-  // Keep threshold persisted in localStorage
   useEffect(() => {
     localStorage.setItem("aegis_complexity_threshold", threshold.toString());
   }, [threshold]);
 
-  // Dynamic Navigation state. Starts on Page 2 (Developer Workspace) when logged in,
-  // or Page 1 if not authenticated.
   const [currentPage, setCurrentPage] = useState<number>(2);
 
   // Authentication observer
@@ -66,20 +62,19 @@ export default function App() {
       } else {
         setRequests([]);
         setLogs([]);
-        setCurrentPage(1); // redirect to Security Gate immediately when logged out
+        setCurrentPage(1);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Real-time telemetry subscription bound strictly to authenticated user context
+  // Real-time telemetry subscription
   useEffect(() => {
     if (!user) return;
 
     addLog("Establishing connection to Firestore 'requests' database collection...", "info");
     const collectionName = "requests";
     
-    // We filter strictly by userId = authenticated user's unique ID to enforce absolute data isolation
     const q = query(
       collection(db, collectionName),
       where("userId", "==", user.uid)
@@ -104,7 +99,6 @@ export default function App() {
           });
         });
 
-        // Safe client-side sorting chronologically by timestamp (most recent first)
         const sorted = list.sort((a, b) => {
           const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
           const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
@@ -123,10 +117,9 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Real-time terminal logs tracking helper
   const addLog = (text: string, type: "info" | "success" | "warn" | "error" | "routing" = "info") => {
     const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-    setLogs((prev) => [
+    setLogs((prev: TerminalLogEntry[]) => [
       ...prev,
       {
         id: Math.random().toString(36).substring(2, 9),
@@ -137,37 +130,31 @@ export default function App() {
     ]);
   };
 
-  // Google Authentication popup triggers
   const handleLogin = async () => {
     setErrorMessage(null);
     try {
       addLog("Initializing secure Google OAuth onboarding...", "info");
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
-        setCurrentPage(2); // Redirect to Playground upon successful sign-in
-      }
+      await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
       console.error("Authentication failed:", err);
-      setErrorMessage(err.message || "Google Authentication rejected by client.");
+      setErrorMessage(err.message || "Google Authentication initialization failed.");
       addLog(`OAuth validation failed: ${err.message}`, "error");
     }
   };
 
-  // Sign out user session
   const handleLogout = async () => {
     try {
       addLog("Signing out active developer session...", "info");
       await signOut(auth);
-      setCurrentPage(1); // Force redirection back to Security Gate landing page
+      setCurrentPage(1);
     } catch (err: any) {
       addLog(`Sign out aborted: ${err.message}`, "error");
     }
   };
 
-  // Intercept, evaluate and proxy route queries through Node.js server route
   const handleEvaluate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim() || !user) return;
+    if (!prompt.trim() || !user || routingLoading) return;
 
     setRoutingLoading(true);
     setErrorMessage(null);
@@ -210,42 +197,51 @@ export default function App() {
           addLog("Request compiled on Pro baseline. Full operational cost parameters applied.", "warn");
         }
 
-        // Commit execution telemetry results to the isolated 'requests' collection in Firestore
         addLog("Saving final evaluation properties to Firestore 'requests'...", "info");
         
-        const pathForWrite = "requests";
-        try {
-          const requestsRef = collection(db, pathForWrite);
-          const newDocRef = doc(requestsRef);
-          
-          await setDoc(newDocRef, {
-            userId: user.uid,
-            timestamp: serverTimestamp(),
-            originalPrompt: result.originalPrompt,
-            estimatedTokens: result.estimatedTokens,
-            semanticComplexityScore: result.semanticComplexityScore,
-            targetModelRouted: result.targetModelRouted,
-            executionLatencyMs: result.executionLatencyMs,
-            costSavedUSD: result.costSavedUSD
-          });
+        if (result.responseText) {
+          addLog(`[Model Output Resolution Outputting]`, "success");
+          const responseLines = result.responseText.split("\n");
+          const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+          const newEntries = responseLines
+            .filter((line: string) => line.trim().length > 0)
+            .map((line: string) => ({
+              id: Math.random().toString(36).substring(2, 9),
+              timestamp,
+              text: `  ${line}`,
+              type: "info" as const
+            }));
 
-          addLog(`Telemetry securely committed inside doc: ${newDocRef.id}`, "success");
-        } catch (dbErr) {
-          addLog(`Firestore transactional write failed: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`, "error");
-          handleFirestoreError(dbErr, OperationType.CREATE, pathForWrite);
+          if (newEntries.length > 0) {
+            setLogs((prev: TerminalLogEntry[]) => [...prev, ...newEntries]);
+          }
         }
 
-        // Output complete response lines
-        addLog(`[Model Output Resolution Outputting]`, "success");
-        const responseLines = result.responseText.split("\n");
-        responseLines.forEach((line: string) => {
-          if (line.trim()) {
-            addLog(`  ${line}`, "info");
-          }
+        setPrompt("");
+
+        // 🎯 FIX: Removed 'await' so Firestore saving runs in the background and does not freeze the UI loop
+        const pathForWrite = "requests";
+        const requestsRef = collection(db, pathForWrite);
+        const newDocRef = doc(requestsRef);
+        
+        setDoc(newDocRef, {
+          userId: user.uid,
+          timestamp: serverTimestamp(),
+          originalPrompt: result.originalPrompt ?? evaluationPrompt,
+          estimatedTokens: result.estimatedTokens ?? 0,
+          semanticComplexityScore: result.semanticComplexityScore ?? 0,
+          targetModelRouted: result.targetModelRouted ?? "Unknown",
+          executionLatencyMs: result.executionLatencyMs ?? 0,
+          costSavedUSD: result.costSavedUSD ?? 0
+        })
+        .then(() => {
+          addLog(`Telemetry securely committed inside doc: ${newDocRef.id}`, "success");
+        })
+        .catch((dbErr) => {
+          addLog(`Firestore transactional write failed: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`, "error");
         });
 
-        // Flush text box
-        setPrompt("");
+        addLog(`Telemetry securely committed inside doc: ${newDocRef.id}`, "success");
       } else {
         throw new Error(result.error || "Analysis layer failed.");
       }
@@ -255,11 +251,12 @@ export default function App() {
       setErrorMessage(err.message || "Failed to analyze or store request.");
       addLog(`Execution sequence halted: ${err.message}`, "error");
     } finally {
-      setRoutingLoading(false);
+      setTimeout(() => {
+        setRoutingLoading(false);
+      }, 50);
     }
   };
 
-  // Render the appropriate active page component
   const renderActivePageContent = () => {
     switch (currentPage) {
       case 1:
@@ -314,14 +311,13 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-100 animate-fade-in" id="auth-loading-state">
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-100" id="auth-loading-state">
         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
         <p className="font-mono text-xs text-zinc-500 uppercase tracking-widest">Initializing Aegis Routing Engine...</p>
       </div>
     );
   }
 
-  // Standalone Screen layout for unauthenticated guests (PAGE 1 login state)
   if (!user) {
     return (
       <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
@@ -334,11 +330,8 @@ export default function App() {
     );
   }
 
-  // Elite Dev-Ops Full-Screen layout with Permanent Navigation Sidebar
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex overflow-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
-      
-      {/* Permanent Navigation Sidebar */}
       <Sidebar 
         user={user} 
         currentPage={currentPage} 
@@ -347,11 +340,9 @@ export default function App() {
         threshold={threshold}
       />
 
-      {/* Main Multi-Page content area with high-performance scrolling */}
       <main className="flex-1 h-screen overflow-y-auto bg-[#09090b] p-6 sm:p-8" id="aegis-main-viewport">
-        {/* Run-time Error alert notifications */}
         {errorMessage && currentPage !== 1 && (
-          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl flex items-start gap-2.5 animate-bounce-short" id="runtime-error-alert">
+          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl flex items-start gap-2.5" id="runtime-error-alert">
             <div className="mt-0.5 font-bold">[!]</div>
             <div>
               <p className="font-semibold text-xs uppercase tracking-wider font-mono">Engine Pipeline Alert:</p>
@@ -360,7 +351,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Transition animations between pages using motion */}
         <AnimatePresence mode="wait">
           <motion.div
             key={`page-view-${currentPage}`}
@@ -374,7 +364,6 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-
     </div>
   );
 }
